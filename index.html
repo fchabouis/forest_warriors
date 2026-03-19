@@ -1593,7 +1593,7 @@ function gererBoss(scene, dt) {
 
   // --- Déplacement normal ---
   boss.setFlipX(dx < 0);
-  if (dist > 100) {
+  if (dist > 52) {
     boss.setVelocityX(dx > 0 ? speed : -speed);
     boss.play('loup-walk', true);
   } else {
