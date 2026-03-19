@@ -34,16 +34,26 @@
       display: none;
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      height: 170px;
+      height: 160px;
       z-index: 100;
       pointer-events: none;
-      padding: 0 18px 18px;
+      padding: 0 16px 14px;
       justify-content: space-between;
       align-items: flex-end;
     }
     @media (pointer: coarse) {
       #mobile-controls { display: flex; }
       #controles { display: none; }
+      #titre { display: none; }
+      body { height: 100dvh; overflow: hidden; }
+    }
+    /* Mode paysage : contrôles plus petits */
+    @media (pointer: coarse) and (orientation: landscape) {
+      #mobile-controls { height: 120px; padding: 0 12px 10px; }
+      #joystick-base   { width: 100px; height: 100px; }
+      #joystick-thumb  { width: 42px; height: 42px; }
+      .btn-mobile      { width: 56px; height: 56px; font-size: 20px; }
+      #btn-zone        { gap: 6px; }
     }
     #joystick-base {
       width: 130px; height: 130px;
@@ -69,17 +79,17 @@
     #btn-zone {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
       pointer-events: none;
     }
     .btn-mobile {
-      width: 72px; height: 72px;
+      width: 68px; height: 68px;
       border-radius: 50%;
       border: 3px solid rgba(255,255,255,0.55);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 26px;
+      font-size: 24px;
       pointer-events: all;
       touch-action: none;
       user-select: none;
@@ -90,8 +100,11 @@
     }
     #btn-jump   { background: rgba(52, 152, 219, 0.65); }
     #btn-attack { background: rgba(231, 76,  60, 0.65); }
+    #btn-shield { background: rgba(46,  204, 113, 0.65); }
     #btn-jump.active   { background: rgba(52, 152, 219, 0.95); }
     #btn-attack.active { background: rgba(231, 76,  60, 0.95); }
+    #btn-shield.active { background: rgba(46,  204, 113, 0.95); }
+    #btn-shield.disabled { opacity: 0.35; pointer-events: none; }
   </style>
 </head>
 <body>
@@ -105,6 +118,7 @@
   <div id="btn-zone">
     <div id="btn-jump"   class="btn-mobile">↑</div>
     <div id="btn-attack" class="btn-mobile">⚔</div>
+    <div id="btn-shield" class="btn-mobile">🛡</div>
   </div>
 </div>
 
@@ -494,6 +508,10 @@ const config = {
   width: W,
   height: H,
   backgroundColor: '#5B8DD9',
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  },
   physics: {
     default: 'arcade',
     arcade: { gravity: { y: 700 }, debug: false }
@@ -505,7 +523,7 @@ const config = {
 //  ÉTAT DU JEU
 // ═══════════════════════════════════════════════════════════
 // État des contrôles tactiles mobiles
-const mobileInput = { left: false, right: false, jumpJustDown: false, attackJustDown: false };
+const mobileInput = { left: false, right: false, jumpJustDown: false, attackJustDown: false, shieldJustDown: false };
 
 let player;
 let cursors, spaceKey;
@@ -1085,12 +1103,15 @@ function gererJoueur(scene, dt) {
   // Reset combo stomp au sol
   if (auSol && stompCombo > 0) stompCombo = 0;
 
-  // Activation armure (↓)
-  if (Phaser.Input.Keyboard.JustDown(cursors.down) && !armorActive && armorCharges > 0) {
+  // Activation armure (↓ ou bouton bouclier)
+  if ((Phaser.Input.Keyboard.JustDown(cursors.down) || mobileInput.shieldJustDown) && !armorActive && armorCharges > 0) {
+    mobileInput.shieldJustDown = false;
     armorActive = true;
     armorTimer  = ARMOR_DURATION;
     armorCharges--;
     if (armorCharges < 3 && armorRecharge <= 0) armorRecharge = ARMOR_COOLDOWN;
+  } else {
+    mobileInput.shieldJustDown = false;
   }
 
   // Aura visuelle armure
@@ -1725,6 +1746,24 @@ new Phaser.Game(config);
   }, { passive: false });
   btnA.addEventListener('touchend', e => { e.preventDefault(); btnA.classList.remove('active'); }, { passive: false });
   btnA.addEventListener('touchcancel', () => btnA.classList.remove('active'));
+
+  const btnS = document.getElementById('btn-shield');
+  btnS.addEventListener('touchstart', e => {
+    e.preventDefault(); mobileInput.shieldJustDown = true; btnS.classList.add('active');
+  }, { passive: false });
+  btnS.addEventListener('touchend', e => { e.preventDefault(); btnS.classList.remove('active'); }, { passive: false });
+  btnS.addEventListener('touchcancel', () => btnS.classList.remove('active'));
+
+  // Mettre à jour l'état visuel du bouton bouclier selon les charges
+  setInterval(() => {
+    if (typeof armorCharges !== 'undefined') {
+      if (armorCharges <= 0 || (typeof armorActive !== 'undefined' && armorActive)) {
+        btnS.classList.add('disabled');
+      } else {
+        btnS.classList.remove('disabled');
+      }
+    }
+  }, 250);
 })();
 </script>
 <div id="controles">← → Déplacer &nbsp;|&nbsp; ESPACE Attaquer &nbsp;|&nbsp; Ouvre ce fichier dans un navigateur</div>
