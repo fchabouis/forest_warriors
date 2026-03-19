@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Forest Warriors — Game Over Style</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -27,10 +28,86 @@
       font-size: 13px;
       margin-top: 6px;
     }
+
+    /* ── Contrôles mobiles ── */
+    #mobile-controls {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 170px;
+      z-index: 100;
+      pointer-events: none;
+      padding: 0 18px 18px;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    @media (pointer: coarse) {
+      #mobile-controls { display: flex; }
+      #controles { display: none; }
+    }
+    #joystick-base {
+      width: 130px; height: 130px;
+      background: rgba(255,255,255,0.12);
+      border: 3px solid rgba(255,255,255,0.35);
+      border-radius: 50%;
+      position: relative;
+      pointer-events: all;
+      touch-action: none;
+      flex-shrink: 0;
+    }
+    #joystick-thumb {
+      width: 54px; height: 54px;
+      background: rgba(255,255,255,0.45);
+      border: 2px solid rgba(255,255,255,0.75);
+      border-radius: 50%;
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      transition: transform 0.05s;
+    }
+    #btn-zone {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .btn-mobile {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      pointer-events: all;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      color: #fff;
+      font-weight: bold;
+      text-shadow: 1px 1px 3px #000;
+    }
+    #btn-jump   { background: rgba(52, 152, 219, 0.65); }
+    #btn-attack { background: rgba(231, 76,  60, 0.65); }
+    #btn-jump.active   { background: rgba(52, 152, 219, 0.95); }
+    #btn-attack.active { background: rgba(231, 76,  60, 0.95); }
   </style>
 </head>
 <body>
 <div id="titre">⚔️ FOREST WARRIORS ⚔️</div>
+
+<!-- Contrôles tactiles mobiles -->
+<div id="mobile-controls">
+  <div id="joystick-base">
+    <div id="joystick-thumb"></div>
+  </div>
+  <div id="btn-zone">
+    <div id="btn-jump"   class="btn-mobile">↑</div>
+    <div id="btn-attack" class="btn-mobile">⚔</div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 <script>
 'use strict';
@@ -427,6 +504,9 @@ const config = {
 // ═══════════════════════════════════════════════════════════
 //  ÉTAT DU JEU
 // ═══════════════════════════════════════════════════════════
+// État des contrôles tactiles mobiles
+const mobileInput = { left: false, right: false, jumpJustDown: false, attackJustDown: false };
+
 let player;
 let cursors, spaceKey;
 let playerHP = 100;
@@ -943,12 +1023,16 @@ function gererJoueur(scene, dt) {
   const auSol = player.body.blocked.down;
 
   // Saut
-  if (Phaser.Input.Keyboard.JustDown(cursors.up) && auSol && !enAttaque) {
+  if ((Phaser.Input.Keyboard.JustDown(cursors.up) || mobileInput.jumpJustDown) && auSol && !enAttaque) {
+    mobileInput.jumpJustDown = false;
     player.setVelocityY(-560);
+  } else {
+    mobileInput.jumpJustDown = false;
   }
 
   // Attaque
-  if (Phaser.Input.Keyboard.JustDown(spaceKey) && attackTimer <= 0 && !enAttaque && auSol) {
+  if ((Phaser.Input.Keyboard.JustDown(spaceKey) || mobileInput.attackJustDown) && attackTimer <= 0 && !enAttaque && auSol) {
+    mobileInput.attackJustDown = false;
     attackTimer = 0.5;
     player.play('hero-attack', true);
     if (hasLance) {
@@ -1025,11 +1109,11 @@ function gererJoueur(scene, dt) {
   player.setAlpha(hurtTimer > 0 ? (Math.floor(hurtTimer * 10) % 2 === 0 ? 0.4 : 1) : 1);
 
   // Mouvement
-  if (cursors.left.isDown) {
+  if (cursors.left.isDown || mobileInput.left) {
     player.setVelocityX(-195);
     player.setFlipX(true);
     if (auSol) player.play('hero-walk', true);
-  } else if (cursors.right.isDown) {
+  } else if (cursors.right.isDown || mobileInput.right) {
     player.setVelocityX(195);
     player.setFlipX(false);
     if (auSol) player.play('hero-walk', true);
@@ -1574,6 +1658,74 @@ function gameOverEcran(scene) {
 
 // ═══════════════════════════════════════════════════════════
 new Phaser.Game(config);
+
+// ── Joystick & boutons tactiles ──────────────────────────
+(function setupMobileControls() {
+  const base   = document.getElementById('joystick-base');
+  const thumb  = document.getElementById('joystick-thumb');
+  const btnJ   = document.getElementById('btn-jump');
+  const btnA   = document.getElementById('btn-attack');
+  if (!base) return;
+
+  const DEAD = 14;
+  let jtId = null;  // identifiant du touch actif sur le joystick
+
+  function updateJoystick(t) {
+    const r  = base.getBoundingClientRect();
+    const cx = r.left + r.width  / 2;
+    const cy = r.top  + r.height / 2;
+    const dx = t.clientX - cx;
+    const dy = t.clientY - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const max  = r.width / 2 - 8;
+    const cDist = Math.min(dist, max);
+    const ang  = Math.atan2(dy, dx);
+    const tx   = Math.cos(ang) * cDist;
+    const ty   = Math.sin(ang) * cDist;
+    thumb.style.transform = `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px))`;
+    mobileInput.left  = dx < -DEAD;
+    mobileInput.right = dx >  DEAD;
+  }
+
+  base.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (jtId === null) { jtId = e.changedTouches[0].identifier; updateJoystick(e.changedTouches[0]); }
+  }, { passive: false });
+
+  base.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) { if (t.identifier === jtId) { updateJoystick(t); break; } }
+  }, { passive: false });
+
+  base.addEventListener('touchend', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier === jtId) {
+        jtId = null;
+        mobileInput.left = mobileInput.right = false;
+        thumb.style.transform = 'translate(-50%, -50%)';
+        break;
+      }
+    }
+  }, { passive: false });
+
+  base.addEventListener('touchcancel', e => {
+    jtId = null; mobileInput.left = mobileInput.right = false;
+    thumb.style.transform = 'translate(-50%, -50%)';
+  }, { passive: false });
+
+  btnJ.addEventListener('touchstart', e => {
+    e.preventDefault(); mobileInput.jumpJustDown = true; btnJ.classList.add('active');
+  }, { passive: false });
+  btnJ.addEventListener('touchend', e => { e.preventDefault(); btnJ.classList.remove('active'); }, { passive: false });
+  btnJ.addEventListener('touchcancel', () => btnJ.classList.remove('active'));
+
+  btnA.addEventListener('touchstart', e => {
+    e.preventDefault(); mobileInput.attackJustDown = true; btnA.classList.add('active');
+  }, { passive: false });
+  btnA.addEventListener('touchend', e => { e.preventDefault(); btnA.classList.remove('active'); }, { passive: false });
+  btnA.addEventListener('touchcancel', () => btnA.classList.remove('active'));
+})();
 </script>
 <div id="controles">← → Déplacer &nbsp;|&nbsp; ESPACE Attaquer &nbsp;|&nbsp; Ouvre ce fichier dans un navigateur</div>
 </body>
