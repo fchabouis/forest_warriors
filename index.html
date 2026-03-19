@@ -545,7 +545,7 @@ let parachutistes;
 let groundRect;
 let paraSpawnes = 0;
 const PARA_MAX = 15;
-let hpBarGfx, hpTextObj, scoreTextObj;
+let hpBarGfx, hpTextObj, scoreTextObj, ennemisTextObj;
 let armorBarGfx, armorTextObj;
 let hasLance    = false;
 let portal      = null;
@@ -937,6 +937,13 @@ function create() {
     fontSize: '16px', fill: '#FFD700', stroke: '#000', strokeThickness: 3
   }).setOrigin(1, 0).setScrollFactor(0).setDepth(22);
 
+  const ennemiBg = s.add.graphics().setScrollFactor(0).setDepth(20);
+  ennemiBg.fillStyle(0x000000, 0.45);
+  ennemiBg.fillRoundedRect(W - 168, 34, 160, 24, 5);
+  ennemisTextObj = s.add.text(W - 10, 37, '☠ Ennemis : --', {
+    fontSize: '13px', fill: '#FF8C8C', stroke: '#000', strokeThickness: 2
+  }).setOrigin(1, 0).setScrollFactor(0).setDepth(22);
+
   // Fond UI armure
   const armorBg = s.add.graphics().setScrollFactor(0).setDepth(20);
   armorBg.fillStyle(0x000000, 0.45);
@@ -1012,10 +1019,11 @@ function update(time, delta) {
   verifierLances(this);
   dessineBarreVie();
 
-  // Niveau 1 : portail quand tout est mort
-  if (level === 1 && !portal && !gameOver &&
-      enemies.countActive() === 0 && parachutistes.countActive() === 0) {
-    spawnPortail(this);
+  // Niveau 1 : compteur ennemis + portail quand tout est mort
+  if (level === 1 && !gameOver) {
+    const restants = enemies.countActive() + parachutistes.countActive();
+    ennemisTextObj.setText(restants > 0 ? `☠ Ennemis : ${restants}` : '✔ Cherche le portail !');
+    if (!portal && restants === 0) spawnPortail(this);
   }
 
   // Collision portail
@@ -1221,6 +1229,17 @@ function gererEnnemis(scene, dt) {
       e.setFlipX(patDir < 0);
       e.play(type + '-walk', true);
     }
+
+    // ── Confinement dans le champ de caméra ──
+    const cam = scene.cameras.main;
+    const marge = 28;
+    if (e.x < cam.scrollX + marge) {
+      e.x = cam.scrollX + marge;
+      if (e.body.velocity.x < 0) { e.setVelocityX(0); e.setData('patDir', 1); }
+    } else if (e.x > cam.scrollX + W - marge) {
+      e.x = cam.scrollX + W - marge;
+      if (e.body.velocity.x > 0) { e.setVelocityX(0); e.setData('patDir', -1); }
+    }
   });
 }
 
@@ -1257,6 +1276,11 @@ function updateParachutistes(scene) {
         hurtTimer = 0.8;
       }
     }
+    // Confinement horizontal dans le champ caméra
+    const cam = scene.cameras.main;
+    if (p.x < cam.scrollX + 24) p.x = cam.scrollX + 24;
+    else if (p.x > cam.scrollX + W - 24) p.x = cam.scrollX + W - 24;
+
     // Atterrissage
     if (p.y >= FLOOR) {
       const lx = p.x;
@@ -1486,6 +1510,7 @@ function spawnPortail(scene) {
 function demarrerBoss(scene) {
   level = 2;
   hasLance = true;
+  ennemisTextObj.setVisible(false);
 
   // Nettoyer
   enemies.clear(true, true);
@@ -1641,6 +1666,17 @@ function verifierLances(scene) {
   });
 }
 
+function ajouterBoutonRejouer(scene, y) {
+  const bg = scene.add.rectangle(W / 2, y, 190, 46, 0x27AE60)
+    .setScrollFactor(0).setDepth(31).setInteractive({ useHandCursor: true });
+  scene.add.text(W / 2, y, '↺  REJOUER', {
+    fontSize: '20px', fill: '#FFF', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+  }).setOrigin(0.5).setScrollFactor(0).setDepth(32);
+  bg.on('pointerover', () => bg.setFillStyle(0x2ECC71));
+  bg.on('pointerout',  () => bg.setFillStyle(0x27AE60));
+  bg.on('pointerdown', () => window.location.reload());
+}
+
 function victoireEcran(scene) {
   player.setVelocityX(0);
   scene.add.rectangle(W / 2, H / 2, 460, 230, 0x000000, 0.85)
@@ -1654,9 +1690,7 @@ function victoireEcran(scene) {
   scene.add.text(W / 2, H / 2 + 35, `Score final : ${score}`, {
     fontSize: '30px', fill: '#FFD700', stroke: '#000', strokeThickness: 4, fontStyle: 'bold'
   }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
-  scene.add.text(W / 2, H / 2 + 80, 'F5 pour rejouer', {
-    fontSize: '17px', fill: '#CCC', stroke: '#000', strokeThickness: 2
-  }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
+  ajouterBoutonRejouer(scene, H / 2 + 82);
 }
 
 function gameOverEcran(scene) {
@@ -1672,9 +1706,7 @@ function gameOverEcran(scene) {
   scene.add.text(W / 2, H / 2 - 5, `Score final : ${score}`, {
     fontSize: '28px', fill: '#FFD700', stroke: '#000', strokeThickness: 3
   }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
-  scene.add.text(W / 2, H / 2 + 50, 'Appuyer sur F5 pour rejouer', {
-    fontSize: '17px', fill: '#CCC', stroke: '#000', strokeThickness: 2
-  }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
+  ajouterBoutonRejouer(scene, H / 2 + 52);
 }
 
 // ═══════════════════════════════════════════════════════════
