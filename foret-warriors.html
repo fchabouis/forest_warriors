@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Forest Warriors — Game Over Style</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1a0a00;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    #titre {
+      color: #FFD700;
+      font-family: serif;
+      font-size: 26px;
+      text-shadow: 2px 2px #000;
+      margin-bottom: 8px;
+      letter-spacing: 2px;
+    }
+    #controles {
+      color: #AAA;
+      font-family: monospace;
+      font-size: 13px;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+<div id="titre">⚔️ FOREST WARRIORS ⚔️</div>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════
+//  CONSTANTES
+// ═══════════════════════════════════════════════════════════
+const W = 800, H = 450;
+const FLOOR = 390;       // Y surface du sol
+const WORLD = 5000;      // Largeur totale du monde
+
+// ═══════════════════════════════════════════════════════════
+//  DESSIN SPRITES PIXEL-ART (canvas procédural)
+// ═══════════════════════════════════════════════════════════
+
+// Héros : petit aventurier casqué avec épée (inspiré style Game Over)
+// Canvas 64×56 par frame — épée toujours côté DROIT (flipX gère le retournement)
+function dessineHeros(ctx, frame) {
+  ctx.clearRect(0, 0, 64, 56);
+  const atk = frame >= 4;
+  const bob = [0, -2, 0, 2][frame % 4];
+
+  // --- Jambes ---
+  ctx.fillStyle = '#4A3010';
+  if (atk) {
+    ctx.fillRect(16, 38 + bob, 10, 14);
+    ctx.fillRect(28, 38 + bob, 10, 14);
+  } else {
+    const ll = frame % 2 === 0;
+    ctx.fillRect(ll ? 14 : 18, 38 + bob, 10, 14);
+    ctx.fillRect(ll ? 30 : 26, 38 + bob, 10, 14);
+  }
+  // Bottes
+  ctx.fillStyle = '#2A1A00';
+  if (atk) {
+    ctx.fillRect(15, 48 + bob, 12, 6);
+    ctx.fillRect(27, 48 + bob, 12, 6);
+  } else {
+    const ll = frame % 2 === 0;
+    ctx.fillRect(ll ? 13 : 17, 48 + bob, 12, 6);
+    ctx.fillRect(ll ? 29 : 25, 48 + bob, 12, 6);
+  }
+
+  // --- Corps armure ---
+  ctx.fillStyle = '#8B6914';
+  ctx.fillRect(14, 25 + bob, 26, 16);
+  ctx.fillStyle = '#C8A030';
+  ctx.fillRect(16, 25 + bob, 22, 5);
+  ctx.fillStyle = '#6A4A08';
+  ctx.fillRect(16, 31 + bob, 5, 8);
+  ctx.fillRect(33, 31 + bob, 5, 8);
+  ctx.fillRect(22, 33 + bob, 10, 6);
+
+  // --- Tête avec casque ---
+  ctx.fillStyle = '#C8A030';
+  ctx.fillRect(14, 10 + bob, 26, 17);
+  ctx.fillStyle = '#FFD700';
+  ctx.fillRect(16, 5 + bob, 22, 7);
+  ctx.fillStyle = '#FFB300';
+  ctx.fillRect(19, 3 + bob, 16, 5);
+  ctx.fillStyle = '#C8A030';
+  ctx.fillRect(14, 16 + bob, 5, 9);
+  ctx.fillRect(35, 16 + bob, 5, 9);
+
+  // --- Visage ---
+  ctx.fillStyle = '#FDBCB4';
+  ctx.fillRect(19, 13 + bob, 16, 12);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(21, 15 + bob, 4, 4);
+  ctx.fillRect(29, 15 + bob, 4, 4);
+  ctx.fillStyle = '#555';
+  ctx.fillRect(22, 21 + bob, 10, 2);
+
+  // --- Épée (toujours côté droit du canvas) ---
+  if (atk) {
+    // Attaque : grande lame horizontale tendue vers la droite
+    ctx.fillStyle = '#C0C0C0';
+    ctx.fillRect(38, 22 + bob, 26, 7);   // lame longue
+    ctx.fillStyle = '#E8E8E8';
+    ctx.fillRect(40, 22 + bob, 24, 3);   // reflet haut
+    ctx.fillStyle = '#A0A0A0';
+    ctx.fillRect(40, 26 + bob, 24, 2);   // ombre bas
+    ctx.fillStyle = '#8B6914';
+    ctx.fillRect(34, 18 + bob, 6, 16);   // garde verticale
+    ctx.fillStyle = '#6A4A08';
+    ctx.fillRect(35, 28 + bob, 5, 8);    // manche
+  } else {
+    // Normal : grande épée verticale côté droit
+    ctx.fillStyle = '#C0C0C0';
+    ctx.fillRect(40, 10 + bob, 7, 30);   // lame
+    ctx.fillStyle = '#E8E8E8';
+    ctx.fillRect(41, 10 + bob, 5, 14);   // reflet
+    ctx.fillStyle = '#A0A0A0';
+    ctx.fillRect(45, 10 + bob, 2, 30);   // tranchant
+    ctx.fillStyle = '#8B6914';
+    ctx.fillRect(34, 26 + bob, 18, 6);   // garde horizontale
+    ctx.fillRect(38, 32 + bob, 6, 9);    // manche
+  }
+}
+
+// Orc : gros, vert, nez ÉNORME, massue cloutée (style Game Over)
+function dessineOrc(ctx, frame) {
+  ctx.clearRect(0, 0, 80, 80);
+  const atk = frame >= 4;
+  const bob = [0, -3, 0, 3][frame % 4];
+
+  // --- Jambes ---
+  ctx.fillStyle = '#3A5A20';
+  if (atk) {
+    ctx.fillRect(14, 63 + bob, 20, 17);
+    ctx.fillRect(46, 63 + bob, 20, 17);
+  } else {
+    const ll = frame % 2 === 0;
+    ctx.fillRect(ll ? 10 : 16, 63 + bob, 20, 17);
+    ctx.fillRect(ll ? 50 : 44, 63 + bob, 20, 17);
+  }
+
+  // --- Corps massif ---
+  ctx.fillStyle = '#4A7C30';
+  ctx.fillRect(8, 30 + bob, 58, 36);
+  ctx.fillStyle = '#5A8C40';   // ventre bombé
+  ctx.fillRect(15, 37 + bob, 44, 25);
+  ctx.fillStyle = '#3A6C20';  // nombril
+  ctx.fillRect(35, 50 + bob, 8, 8);
+  ctx.fillStyle = '#8B4513';  // ceinture
+  ctx.fillRect(8, 60 + bob, 58, 6);
+  ctx.fillStyle = '#A0522D';
+  ctx.fillRect(35, 57 + bob, 8, 12);  // boucle
+
+  // --- Bras ---
+  ctx.fillStyle = '#4A7C30';
+  ctx.fillRect(0, 30 + bob, 10, 28);
+  ctx.fillRect(66, 30 + bob, 10, 28);
+  ctx.fillStyle = '#3A6C20';  // mains
+  ctx.fillRect(-1, 55 + bob, 12, 9);
+  ctx.fillRect(65, 55 + bob, 12, 9);
+  // Griffes
+  ctx.fillStyle = '#222';
+  ctx.fillRect(-1, 63 + bob, 3, 4); ctx.fillRect(3, 63 + bob, 3, 4); ctx.fillRect(7, 63 + bob, 3, 4);
+  ctx.fillRect(66, 63 + bob, 3, 4); ctx.fillRect(70, 63 + bob, 3, 4); ctx.fillRect(74, 63 + bob, 3, 4);
+
+  // --- Grosse tête ---
+  ctx.fillStyle = '#4A7C30';
+  ctx.fillRect(10, 5 + bob, 56, 32);
+  // Oreilles
+  ctx.fillRect(4, 8 + bob, 8, 14); ctx.fillRect(64, 8 + bob, 8, 14);
+  ctx.fillStyle = '#A5D6A7';
+  ctx.fillRect(5, 10 + bob, 5, 9);  ctx.fillRect(65, 10 + bob, 5, 9);
+
+  // Yeux rouges méchants
+  ctx.fillStyle = '#CC0000';
+  ctx.fillRect(18, 10 + bob, 14, 9); ctx.fillRect(44, 10 + bob, 14, 9);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(22, 12 + bob, 6, 5);  ctx.fillRect(48, 12 + bob, 6, 5);
+  // Sourcils froncés
+  ctx.fillStyle = '#2A4A10';
+  ctx.fillRect(16, 8 + bob, 16, 4); ctx.fillStyle = '#2A4A10';
+  ctx.fillRect(44, 8 + bob, 16, 4);
+
+  // NEZ ÉNORME (trait distinctif Game Over)
+  ctx.fillStyle = '#3A6C20';
+  ctx.fillRect(22, 18 + bob, 30, 14);
+  ctx.fillRect(18, 22 + bob, 38, 10);
+  ctx.fillStyle = '#2A5C10';
+  ctx.fillRect(20, 26 + bob, 8, 7);   // narine G
+  ctx.fillRect(46, 26 + bob, 8, 7);   // narine D
+  ctx.fillStyle = '#1A4A08';
+  ctx.fillRect(21, 27 + bob, 6, 5);
+  ctx.fillRect(47, 27 + bob, 6, 5);
+
+  // Bouche avec défenses
+  ctx.fillStyle = '#1A1A1A';
+  ctx.fillRect(18, 32 + bob, 40, 7);
+  ctx.fillStyle = '#EEE';
+  ctx.fillRect(20, 29 + bob, 10, 7);  // défense G
+  ctx.fillRect(46, 29 + bob, 10, 7);  // défense D
+  ctx.fillRect(34, 32 + bob, 8, 5);   // dent milieu
+  ctx.fillStyle = '#DDD';
+  ctx.fillRect(31, 33 + bob, 6, 3);
+
+  // --- Massue cloutée ---
+  ctx.fillStyle = '#5C3010';
+  if (atk) {
+    // Levée pour frapper
+    ctx.fillRect(68, -2 + bob, 10, 40);
+    ctx.fillStyle = '#7C4820';
+    ctx.fillRect(60, -4 + bob, 26, 16);
+    ctx.fillStyle = '#888';
+    ctx.fillRect(60, -4 + bob, 6, 6); ctx.fillRect(72, -4 + bob, 6, 6);
+    ctx.fillRect(80, -2 + bob, 6, 6);
+  } else {
+    ctx.fillRect(68, 14 + bob, 10, 46);
+    ctx.fillStyle = '#7C4820';
+    ctx.fillRect(60, 10 + bob, 26, 16);
+    ctx.fillStyle = '#888';
+    ctx.fillRect(60, 10 + bob, 6, 6); ctx.fillRect(72, 10 + bob, 6, 6);
+    ctx.fillRect(80, 12 + bob, 6, 6);
+  }
+}
+
+// Gobelin : petit, rapide, oreilles pointues, couteau (style Game Over)
+function dessineGobelin(ctx, frame) {
+  ctx.clearRect(0, 0, 46, 56);
+  const atk = frame >= 4;
+  const bob = [0, -2, 0, 2][frame % 4];
+
+  // --- Jambes ---
+  ctx.fillStyle = '#558B2F';
+  if (atk) {
+    ctx.fillRect(10, 43 + bob, 11, 13);
+    ctx.fillRect(25, 43 + bob, 11, 13);
+  } else {
+    const ll = frame % 2 === 0;
+    ctx.fillRect(ll ? 8 : 12, 43 + bob, 11, 13);
+    ctx.fillRect(ll ? 27 : 23, 43 + bob, 11, 13);
+  }
+
+  // --- Corps ---
+  ctx.fillStyle = '#7CB342';
+  ctx.fillRect(10, 27 + bob, 26, 20);
+  ctx.fillStyle = '#558B2F';
+  ctx.fillRect(10, 27 + bob, 26, 5);    // col vêtement
+  ctx.fillRect(13, 32 + bob, 4, 12);
+  ctx.fillRect(29, 32 + bob, 4, 12);
+  ctx.fillRect(18, 34 + bob, 10, 8);   // tablier
+
+  // --- Bras ---
+  ctx.fillStyle = '#7CB342';
+  ctx.fillRect(3, 27 + bob, 9, 16);
+  ctx.fillRect(34, 27 + bob, 9, 16);
+  ctx.fillStyle = '#5A8F28';
+  ctx.fillRect(3, 40 + bob, 10, 8);
+  ctx.fillRect(33, 40 + bob, 10, 8);
+
+  // --- Tête avec GRANDES oreilles pointues ---
+  ctx.fillStyle = '#7CB342';
+  ctx.fillRect(10, 7 + bob, 26, 24);
+  // Oreilles pointues vers le haut
+  ctx.beginPath();
+  ctx.moveTo(10, 12 + bob);
+  ctx.lineTo(1,  0 + bob);
+  ctx.lineTo(17, 15 + bob);
+  ctx.fillStyle = '#7CB342'; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(36, 12 + bob);
+  ctx.lineTo(45,  0 + bob);
+  ctx.lineTo(29, 15 + bob);
+  ctx.fillStyle = '#7CB342'; ctx.fill();
+  ctx.fillStyle = '#A5D6A7';  // intérieur oreilles
+  ctx.fillRect(6, 5 + bob, 5, 8);
+  ctx.fillRect(35, 5 + bob, 5, 8);
+
+  // Yeux jaunes perçants
+  ctx.fillStyle = '#FFEB3B';
+  ctx.fillRect(13, 11 + bob, 8, 8);
+  ctx.fillRect(25, 11 + bob, 8, 8);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(15, 13 + bob, 5, 5);
+  ctx.fillRect(27, 13 + bob, 5, 5);
+
+  // Nez pointu
+  ctx.fillStyle = '#5A8F28';
+  ctx.fillRect(18, 19 + bob, 10, 7);
+  ctx.fillRect(20, 24 + bob, 6, 5);
+
+  // Bouche avec dents pointues
+  ctx.fillStyle = '#1A1A1A';
+  ctx.fillRect(12, 26 + bob, 22, 6);
+  ctx.fillStyle = '#FFF';
+  ctx.fillRect(13, 24 + bob, 5, 5);
+  ctx.fillRect(21, 24 + bob, 5, 5);
+  ctx.fillRect(29, 24 + bob, 5, 5);
+
+  // --- Couteau/dague ---
+  ctx.fillStyle = '#9E9E9E';
+  if (atk) {
+    ctx.fillRect(35, 20 + bob, 16, 4);   // lame horizontale (attaque)
+    ctx.fillStyle = '#E0E0E0';
+    ctx.fillRect(43, 20 + bob, 8, 2);
+    ctx.fillStyle = '#5D4037';
+    ctx.fillRect(32, 16 + bob, 5, 12);   // garde
+    ctx.fillRect(30, 20 + bob, 5, 4);    // manche
+  } else {
+    ctx.fillRect(38, 18 + bob, 4, 18);   // lame verticale
+    ctx.fillStyle = '#E0E0E0';
+    ctx.fillRect(38, 18 + bob, 4, 8);
+    ctx.fillStyle = '#5D4037';
+    ctx.fillRect(34, 27 + bob, 10, 4);   // garde
+  }
+}
+
+// Loup-garou boss : 6 frames (0-3 marche, 4-5 attaque), 100×110px
+function dessineLoupGarou(ctx, frame) {
+  ctx.clearRect(0, 0, 100, 110);
+  const atk = frame >= 4;
+  const bob = [0, -4, 0, 4][frame % 4];
+  const ll  = frame % 2 === 0;
+
+  // --- Jambes ---
+  ctx.fillStyle = '#4E342E';
+  if (atk) {
+    ctx.fillRect(28, 82 + bob, 20, 26); ctx.fillRect(52, 82 + bob, 20, 26);
+  } else {
+    ctx.fillRect(ll ? 24 : 30, 82 + bob, 20, 26);
+    ctx.fillRect(ll ? 56 : 50, 82 + bob, 20, 26);
+  }
+  // Griffes pieds
+  ctx.fillStyle = '#1A1A1A';
+  const lx = atk ? 27 : (ll ? 23 : 29);
+  const rx = atk ? 51 : (ll ? 55 : 49);
+  ctx.fillRect(lx,     105 + bob, 7, 5); ctx.fillRect(lx + 8, 106 + bob, 7, 5);
+  ctx.fillRect(rx,     105 + bob, 7, 5); ctx.fillRect(rx + 8, 106 + bob, 7, 5);
+
+  // --- Corps massif ---
+  ctx.fillStyle = '#5D4037';
+  ctx.fillRect(24, 42 + bob, 52, 44);
+  ctx.fillStyle = '#6D4C41';  // poitrine
+  ctx.fillRect(26, 46 + bob, 22, 22); ctx.fillRect(52, 46 + bob, 22, 22);
+  ctx.fillStyle = '#8D6E63';  // ventre
+  ctx.fillRect(38, 50 + bob, 24, 30);
+
+  // --- Bras ---
+  ctx.fillStyle = '#5D4037';
+  if (atk) {
+    ctx.fillRect(0,  42 + bob, 26, 16); ctx.fillRect(74, 42 + bob, 26, 16);
+    ctx.fillStyle = '#1A1A1A';
+    ctx.fillRect(-2, 39 + bob, 8, 6);  ctx.fillRect(6,  37 + bob, 8, 6);  ctx.fillRect(14, 39 + bob, 8, 6);
+    ctx.fillRect(94, 39 + bob, 8, 6);  ctx.fillRect(86, 37 + bob, 8, 6);  ctx.fillRect(78, 39 + bob, 8, 6);
+  } else {
+    ctx.fillRect(6,  42 + bob, 20, 36); ctx.fillRect(74, 42 + bob, 20, 36);
+    ctx.fillStyle = '#1A1A1A';
+    ctx.fillRect(4,  75 + bob, 7, 6);  ctx.fillRect(11, 77 + bob, 7, 6);  ctx.fillRect(18, 75 + bob, 7, 6);
+    ctx.fillRect(73, 75 + bob, 7, 6);  ctx.fillRect(80, 77 + bob, 7, 6);  ctx.fillRect(87, 75 + bob, 7, 6);
+  }
+
+  // --- Tête de loup ---
+  ctx.fillStyle = '#5D4037';
+  ctx.fillRect(22, 6 + bob, 56, 42);
+  // Museau
+  ctx.fillStyle = '#4E342E';
+  ctx.fillRect(28, 26 + bob, 44, 24);
+  // Nez
+  ctx.fillStyle = '#1A1A1A';
+  ctx.fillRect(40, 22 + bob, 20, 10);
+  ctx.fillStyle = '#333';
+  ctx.fillRect(42, 24 + bob, 6, 5); ctx.fillRect(52, 24 + bob, 6, 5);
+  // Oreilles pointues
+  ctx.fillStyle = '#5D4037';
+  ctx.beginPath(); ctx.moveTo(22, 12 + bob); ctx.lineTo(4, -8 + bob);  ctx.lineTo(36, 20 + bob); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(78, 12 + bob); ctx.lineTo(96, -8 + bob); ctx.lineTo(64, 20 + bob); ctx.fill();
+  ctx.fillStyle = '#8D6E63';
+  ctx.beginPath(); ctx.moveTo(24, 11 + bob); ctx.lineTo(10, -4 + bob); ctx.lineTo(34, 18 + bob); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(76, 11 + bob); ctx.lineTo(90, -4 + bob); ctx.lineTo(66, 18 + bob); ctx.fill();
+  // Yeux orange/jaune lumineux
+  ctx.fillStyle = '#FF8F00';
+  ctx.fillRect(30, 13 + bob, 16, 11); ctx.fillRect(54, 13 + bob, 16, 11);
+  ctx.fillStyle = '#FFD600';
+  ctx.fillRect(32, 14 + bob, 12, 8);  ctx.fillRect(56, 14 + bob, 12, 8);
+  ctx.fillStyle = '#000';             // pupilles en fente
+  ctx.fillRect(38, 12 + bob, 4, 13); ctx.fillRect(62, 12 + bob, 4, 13);
+  ctx.fillStyle = '#FFF';
+  ctx.fillRect(33, 14 + bob, 3, 3);  ctx.fillRect(57, 14 + bob, 3, 3);
+  // Sourcils froncés
+  ctx.fillStyle = '#3E2723';
+  ctx.fillRect(28, 9 + bob, 20, 6); ctx.fillRect(52, 9 + bob, 20, 6);
+  // Crocs et bouche
+  ctx.fillStyle = '#1A1A1A';
+  ctx.fillRect(30, 36 + bob, 40, 14);
+  ctx.fillStyle = '#FFF';
+  ctx.fillRect(32, 32 + bob, 9, 12); ctx.fillRect(59, 32 + bob, 9, 12);
+  ctx.fillRect(44, 36 + bob, 6, 8);  ctx.fillRect(51, 36 + bob, 6, 8);
+  ctx.fillStyle = '#E53935';          // langue
+  ctx.fillRect(40, 44 + bob, 20, 5);
+  // Cicatrice
+  ctx.strokeStyle = '#3E2723'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(36, 8 + bob); ctx.lineTo(42, 24 + bob); ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CONFIG PHASER
+// ═══════════════════════════════════════════════════════════
+const config = {
+  type: Phaser.AUTO,
+  width: W,
+  height: H,
+  backgroundColor: '#5B8DD9',
+  physics: {
+    default: 'arcade',
+    arcade: { gravity: { y: 700 }, debug: false }
+  },
+  scene: { preload, create, update }
+};
+
+// ═══════════════════════════════════════════════════════════
+//  ÉTAT DU JEU
+// ═══════════════════════════════════════════════════════════
+let player;
+let cursors, spaceKey;
+let playerHP = 100;
+let attackTimer = 0;   // cooldown attaque joueur
+let hurtTimer   = 0;   // invincibilité après dégât reçu
+let score = 0;
+let stompCombo = 0;
+let gameOver = false;
+let armorActive   = false;
+let armorTimer    = 0;       // secondes restantes d'armure active
+let armorCharges  = 3;       // charges disponibles (max 3)
+let armorRecharge = 0;       // timer de recharge d'une charge
+const ARMOR_DURATION = 10;
+const ARMOR_COOLDOWN = 25;   // secondes pour recharger 1 charge
+let enemies;
+let projectiles;
+let parachutistes;
+let groundRect;
+let paraSpawnes = 0;
+const PARA_MAX = 15;
+let hpBarGfx, hpTextObj, scoreTextObj;
+let armorBarGfx, armorTextObj;
+let hasLance    = false;
+let portal      = null;
+let projectilesJoueur;
+let boss        = null;
+let bossHP      = 0, bossMaxHP = 300;
+let bossHPBarGfx = null;
+let bossAtkCD   = 0, bossChargeCD = 0;
+let bossCharging = false;
+let level       = 1;
+
+// ═══════════════════════════════════════════════════════════
+//  PRELOAD — génération de toutes les textures
+// ═══════════════════════════════════════════════════════════
+function preload() {
+  construireTextures(this);
+}
+
+function construireTextures(scene) {
+
+  // ---- Héros (8 frames : 0-3 marche, 4-7 attaque) — 64×56 px par frame ----
+  const heroTex = scene.textures.createCanvas('hero', 64 * 8, 56);
+  const hCtx = heroTex.getContext();
+  for (let f = 0; f < 8; f++) {
+    hCtx.save(); hCtx.translate(f * 64, 0);
+    dessineHeros(hCtx, f);
+    hCtx.restore();
+  }
+  heroTex.refresh();
+  for (let i = 0; i < 8; i++) heroTex.add(i, 0, i * 64, 0, 64, 56);
+
+  // ---- Orc (6 frames : 0-3 marche, 4-5 attaque) ----
+  const orcTex = scene.textures.createCanvas('orc', 80 * 6, 80);
+  const oCtx = orcTex.getContext();
+  for (let f = 0; f < 6; f++) {
+    oCtx.save(); oCtx.translate(f * 80, 0);
+    dessineOrc(oCtx, f);
+    oCtx.restore();
+  }
+  orcTex.refresh();
+  for (let i = 0; i < 6; i++) orcTex.add(i, 0, i * 80, 0, 80, 80);
+
+  // ---- Gobelin (6 frames : 0-3 marche, 4-5 attaque) ----
+  const gobTex = scene.textures.createCanvas('goblin', 46 * 6, 56);
+  const gCtx = gobTex.getContext();
+  for (let f = 0; f < 6; f++) {
+    gCtx.save(); gCtx.translate(f * 46, 0);
+    dessineGobelin(gCtx, f);
+    gCtx.restore();
+  }
+  gobTex.refresh();
+  for (let i = 0; i < 6; i++) gobTex.add(i, 0, i * 46, 0, 46, 56);
+
+  // ---- Particule impact ----
+  const hitTex = scene.textures.createCanvas('hit', 28, 28);
+  const hitCtx = hitTex.getContext();
+  hitCtx.fillStyle = '#FF6600';
+  hitCtx.beginPath(); hitCtx.arc(14, 14, 13, 0, Math.PI * 2); hitCtx.fill();
+  hitCtx.fillStyle = '#FFEE00';
+  hitCtx.beginPath(); hitCtx.arc(14, 14, 7, 0, Math.PI * 2);  hitCtx.fill();
+  hitCtx.fillStyle = '#FFF';
+  hitCtx.beginPath(); hitCtx.arc(14, 14, 3, 0, Math.PI * 2);  hitCtx.fill();
+  hitTex.refresh();
+
+  // ---- Arbre lointain ----
+  const tfTex = scene.textures.createCanvas('treeFar', 80, 180);
+  const tfCtx = tfTex.getContext();
+  tfCtx.fillStyle = '#5D4037';
+  tfCtx.fillRect(34, 110, 12, 70);
+  tfCtx.fillStyle = '#1B5E20';
+  tfCtx.beginPath(); tfCtx.ellipse(40, 90, 36, 56, 0, 0, Math.PI*2); tfCtx.fill();
+  tfCtx.fillStyle = '#2E7D32';
+  tfCtx.beginPath(); tfCtx.ellipse(40, 68, 28, 42, 0, 0, Math.PI*2); tfCtx.fill();
+  tfCtx.fillStyle = '#388E3C';
+  tfCtx.beginPath(); tfCtx.ellipse(40, 50, 20, 30, 0, 0, Math.PI*2); tfCtx.fill();
+  tfTex.refresh();
+
+  // ---- Arbre premier plan ----
+  const tnTex = scene.textures.createCanvas('treeNear', 100, 240);
+  const tnCtx = tnTex.getContext();
+  tnCtx.fillStyle = '#4E342E';
+  tnCtx.fillRect(40, 150, 20, 90);
+  tnCtx.fillStyle = '#33691E';
+  tnCtx.beginPath(); tnCtx.ellipse(50, 118, 48, 70, 0, 0, Math.PI*2); tnCtx.fill();
+  tnCtx.fillStyle = '#558B2F';
+  tnCtx.beginPath(); tnCtx.ellipse(50, 92, 38, 54, 0, 0, Math.PI*2); tnCtx.fill();
+  tnCtx.fillStyle = '#689F38';
+  tnCtx.beginPath(); tnCtx.ellipse(50, 70, 26, 38, 0, 0, Math.PI*2); tnCtx.fill();
+  tnTex.refresh();
+
+  // ---- Buisson ----
+  const busTex = scene.textures.createCanvas('bush', 80, 46);
+  const bCtx = busTex.getContext();
+  bCtx.fillStyle = '#2E7D32';
+  bCtx.beginPath(); bCtx.ellipse(22, 36, 22, 18, 0, 0, Math.PI*2); bCtx.fill();
+  bCtx.beginPath(); bCtx.ellipse(50, 36, 28, 22, 0, 0, Math.PI*2); bCtx.fill();
+  bCtx.beginPath(); bCtx.ellipse(68, 36, 18, 15, 0, 0, Math.PI*2); bCtx.fill();
+  bCtx.fillStyle = '#388E3C';
+  bCtx.beginPath(); bCtx.ellipse(38, 24, 24, 16, 0, 0, Math.PI*2); bCtx.fill();
+  bCtx.fillStyle = '#43A047';
+  bCtx.beginPath(); bCtx.ellipse(55, 20, 16, 12, 0, 0, Math.PI*2); bCtx.fill();
+  busTex.refresh();
+
+  // ---- Champignon décoratif ----
+  const mushTex = scene.textures.createCanvas('mush', 28, 32);
+  const mCtx = mushTex.getContext();
+  mCtx.fillStyle = '#795548';
+  mCtx.fillRect(11, 18, 6, 14);
+  mCtx.fillStyle = '#F44336';
+  mCtx.beginPath(); mCtx.ellipse(14, 18, 14, 12, 0, 0, Math.PI*2); mCtx.fill();
+  mCtx.fillStyle = '#FFCDD2';
+  mCtx.fillRect(6, 14, 6, 6); mCtx.fillRect(16, 10, 5, 5); mCtx.fillRect(8, 8, 4, 4);
+  mushTex.refresh();
+
+  // ---- Parachutiste (ennemi tombant du ciel) ----
+  const paraTex = scene.textures.createCanvas('para', 56, 100);
+  const pCtx = paraTex.getContext();
+  // Dôme coloré (6 segments)
+  const cols = ['#F44336','#FFEB3B','#2196F3','#4CAF50','#FF9800','#E91E63'];
+  const cx = 28, cy = 26, r = 24;
+  for (let i = 0; i < 6; i++) {
+    pCtx.fillStyle = cols[i];
+    pCtx.beginPath();
+    pCtx.moveTo(cx, cy);
+    pCtx.arc(cx, cy, r, (i * Math.PI / 3) - Math.PI / 2, ((i + 1) * Math.PI / 3) - Math.PI / 2);
+    pCtx.fill();
+  }
+  // Contour dôme
+  pCtx.strokeStyle = '#333'; pCtx.lineWidth = 1.5;
+  pCtx.beginPath(); pCtx.arc(cx, cy, r, Math.PI, 0); pCtx.stroke();
+  pCtx.beginPath(); pCtx.moveTo(cx - r, cy); pCtx.lineTo(cx + r, cy); pCtx.stroke();
+  // Cordes
+  pCtx.strokeStyle = '#CCC'; pCtx.lineWidth = 1;
+  [[cx-22,cy+10,cx-6,68],[cx-10,cy+18,cx-2,68],[cx+10,cy+18,cx+2,68],[cx+22,cy+10,cx+6,68]].forEach(([x1,y1,x2,y2]) => {
+    pCtx.beginPath(); pCtx.moveTo(x1, y1); pCtx.lineTo(x2, y2); pCtx.stroke();
+  });
+  // Corps monstre
+  pCtx.fillStyle = '#7CB342';
+  pCtx.fillRect(18, 68, 20, 18);       // torse
+  pCtx.fillRect(16, 52, 24, 20);       // tête
+  pCtx.fillRect(9, 55, 9, 10);         // oreille G
+  pCtx.fillRect(38, 55, 9, 10);        // oreille D
+  pCtx.fillStyle = '#FFEB3B';
+  pCtx.fillRect(19, 57, 7, 6);         // œil G
+  pCtx.fillRect(30, 57, 7, 6);         // œil D
+  pCtx.fillStyle = '#000';
+  pCtx.fillRect(21, 59, 3, 3); pCtx.fillRect(32, 59, 3, 3);
+  pCtx.fillStyle = '#222';
+  pCtx.fillRect(18, 66, 20, 4);        // bouche
+  pCtx.fillStyle = '#FFF';
+  pCtx.fillRect(19, 64, 4, 5); pCtx.fillRect(26, 64, 4, 5); pCtx.fillRect(33, 64, 4, 5);
+  pCtx.fillStyle = '#7CB342';
+  pCtx.fillRect(5, 68, 14, 8);         // bras G
+  pCtx.fillRect(37, 68, 14, 8);        // bras D
+  paraTex.refresh();
+
+  // ---- Portail ----
+  const portalTex = scene.textures.createCanvas('portal', 70, 100);
+  const ptCtx = portalTex.getContext();
+  // Cadre oval extérieur
+  for (let r = 48; r > 6; r -= 5) {
+    const t = (48 - r) / 42;
+    ptCtx.fillStyle = `rgba(${Math.floor(180 * t)},0,${255 - Math.floor(80 * t)},${0.18 + t * 0.6})`;
+    ptCtx.beginPath(); ptCtx.ellipse(35, 50, r * 0.7, r, 0, 0, Math.PI * 2); ptCtx.fill();
+  }
+  // Centre lumineux
+  ptCtx.fillStyle = 'rgba(255,255,255,0.95)';
+  ptCtx.beginPath(); ptCtx.ellipse(35, 50, 10, 14, 0, 0, Math.PI * 2); ptCtx.fill();
+  ptCtx.fillStyle = 'rgba(224,64,251,0.8)';
+  ptCtx.beginPath(); ptCtx.ellipse(35, 50, 18, 26, 0, 0, Math.PI * 2); ptCtx.fill();
+  // Runes
+  ptCtx.strokeStyle = '#CE93D8'; ptCtx.lineWidth = 2;
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3;
+    ptCtx.beginPath(); ptCtx.arc(35 + Math.cos(a) * 38, 50 + Math.sin(a) * 42, 4, 0, Math.PI * 2); ptCtx.stroke();
+  }
+  portalTex.refresh();
+
+  // ---- Lance (projectile joueur) ----
+  const lanceTex = scene.textures.createCanvas('lanceProj', 64, 10);
+  const lncCtx = lanceTex.getContext();
+  lncCtx.fillStyle = '#8D6E63';
+  lncCtx.fillRect(0, 3, 48, 4);             // hampe
+  lncCtx.fillStyle = '#A0887A';
+  lncCtx.fillRect(2, 3, 40, 2);             // reflet hampe
+  lncCtx.fillStyle = '#B0BEC5';
+  lncCtx.beginPath(); lncCtx.moveTo(64, 5); lncCtx.lineTo(46, 0); lncCtx.lineTo(46, 10); lncCtx.fill();
+  lncCtx.fillStyle = '#ECEFF1';
+  lncCtx.beginPath(); lncCtx.moveTo(62, 5); lncCtx.lineTo(50, 1); lncCtx.lineTo(50, 4); lncCtx.fill();
+  lanceTex.refresh();
+
+  // ---- Loup-Garou (boss, 6 frames 100×110px) ----
+  const lgTex = scene.textures.createCanvas('loupGarou', 100 * 6, 110);
+  const lgCtx = lgTex.getContext();
+  for (let f = 0; f < 6; f++) {
+    lgCtx.save(); lgCtx.translate(f * 100, 0);
+    dessineLoupGarou(lgCtx, f);
+    lgCtx.restore();
+  }
+  lgTex.refresh();
+  for (let i = 0; i < 6; i++) lgTex.add(i, 0, i * 100, 0, 100, 110);
+
+  // ---- Rocher (projectile orc) ----
+  const rockTex = scene.textures.createCanvas('rock', 20, 18);
+  const rCtx = rockTex.getContext();
+  rCtx.fillStyle = '#78909C';
+  rCtx.beginPath(); rCtx.ellipse(10, 10, 10, 8, 0, 0, Math.PI * 2); rCtx.fill();
+  rCtx.fillStyle = '#90A4AE';
+  rCtx.fillRect(5, 5, 6, 4);
+  rCtx.fillRect(12, 8, 4, 3);
+  rCtx.fillStyle = '#546E7A';
+  rCtx.fillRect(4, 12, 5, 3);
+  rockTex.refresh();
+
+  // ---- Dague (projectile gobelin) ----
+  const dagTex = scene.textures.createCanvas('dague', 22, 8);
+  const dCtx = dagTex.getContext();
+  dCtx.fillStyle = '#B0BEC5';
+  dCtx.fillRect(0, 2, 16, 4);       // lame
+  dCtx.fillStyle = '#ECEFF1';
+  dCtx.fillRect(0, 2, 8, 2);        // reflet
+  dCtx.fillStyle = '#5D4037';
+  dCtx.fillRect(16, 1, 6, 6);       // manche
+  dCtx.fillStyle = '#78909C';
+  dCtx.fillRect(14, 0, 4, 8);       // garde
+  dagTex.refresh();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CREATE
+// ═══════════════════════════════════════════════════════════
+function create() {
+  const s = this;
+
+  // ---- Ciel dégradé (fixe) ----
+  const sky = s.add.graphics();
+  sky.fillGradientStyle(0x87CEEB, 0x87CEEB, 0x1A237E, 0x1A237E, 1);
+  sky.fillRect(0, 0, W, H);
+  sky.setScrollFactor(0);
+
+  // ---- Soleil ----
+  const sun = s.add.graphics().setScrollFactor(0.05);
+  sun.fillStyle(0xFFF176);
+  sun.fillCircle(680, 55, 32);
+  sun.fillStyle(0xFFEE58, 0.4);
+  sun.fillCircle(680, 55, 44);
+
+  // ---- Nuages (très loin) ----
+  for (let x = 100; x < WORLD; x += 400) {
+    const cg = s.add.graphics().setScrollFactor(0.08);
+    const cx = x + Phaser.Math.Between(-30, 30);
+    const cy = 40 + Phaser.Math.Between(-20, 20);
+    cg.fillStyle(0xFFFFFF, 0.85);
+    cg.fillEllipse(cx, cy, 100, 36);
+    cg.fillEllipse(cx + 40, cy - 10, 70, 30);
+    cg.fillEllipse(cx - 30, cy - 5, 60, 26);
+  }
+
+  // ---- Montagnes lointaines ----
+  const mtns = s.add.graphics().setScrollFactor(0.1);
+  for (let x = 0; x < WORLD; x += 280) {
+    mtns.fillStyle(0x37474F, 0.6);
+    mtns.fillTriangle(x, H - 60, x + 140, H - 200, x + 280, H - 60);
+    mtns.fillStyle(0xFFF, 0.4);
+    mtns.fillTriangle(x + 100, H - 180, x + 140, H - 200, x + 180, H - 175);
+  }
+
+  // ---- Arbres lointains (parallax 0.25) ----
+  for (let x = 0; x < WORLD; x += 110) {
+    s.add.image(x + Phaser.Math.Between(-20, 20), FLOOR - 5, 'treeFar')
+      .setOrigin(0.5, 1)
+      .setScrollFactor(0.25)
+      .setAlpha(0.7)
+      .setScale(Phaser.Math.FloatBetween(0.7, 1.2));
+  }
+
+  // ---- Arbres proches (parallax 0.65) ----
+  for (let x = 60; x < WORLD; x += Phaser.Math.Between(160, 280)) {
+    s.add.image(x, FLOOR, 'treeNear')
+      .setOrigin(0.5, 1)
+      .setScrollFactor(0.65)
+      .setScale(Phaser.Math.FloatBetween(0.8, 1.3));
+  }
+
+  // ---- Sol (visuel) ----
+  const grGfx = s.add.graphics();
+  // Terre
+  grGfx.fillStyle(0x5D4037);
+  grGfx.fillRect(0, FLOOR + 8, WORLD, H - FLOOR);
+  // Herbe
+  grGfx.fillStyle(0x558B2F);
+  grGfx.fillRect(0, FLOOR - 4, WORLD, 14);
+  grGfx.fillStyle(0x689F38);
+  grGfx.fillRect(0, FLOOR - 4, WORLD, 7);
+  // Brins d'herbe
+  grGfx.fillStyle(0x7CB342);
+  for (let x = 8; x < WORLD; x += 18) {
+    grGfx.fillRect(x, FLOOR - 10, 3, 8);
+    grGfx.fillRect(x + 7, FLOOR - 8, 2, 6);
+  }
+
+  // ---- Sol (corps physique) ----
+  groundRect = s.add.rectangle(WORLD / 2, FLOOR + 30, WORLD, 60, 0x000000, 0);
+  s.physics.add.existing(groundRect, true);
+
+  // ---- Décorations (buissons, champignons) ----
+  for (let x = 120; x < WORLD; x += Phaser.Math.Between(180, 420)) {
+    s.add.image(x, FLOOR, 'bush').setOrigin(0.5, 1);
+  }
+  for (let x = 200; x < WORLD; x += Phaser.Math.Between(220, 500)) {
+    s.add.image(x, FLOOR, 'mush').setOrigin(0.5, 1);
+  }
+
+  // ---- Animations ----
+  s.anims.create({ key: 'hero-idle',   frames: s.anims.generateFrameNumbers('hero',   { start: 0, end: 1 }), frameRate: 2,  repeat: -1 });
+  s.anims.create({ key: 'hero-walk',   frames: s.anims.generateFrameNumbers('hero',   { start: 0, end: 3 }), frameRate: 8,  repeat: -1 });
+  s.anims.create({ key: 'hero-attack', frames: s.anims.generateFrameNumbers('hero',   { start: 4, end: 7 }), frameRate: 14, repeat: 0  });
+  s.anims.create({ key: 'orc-walk',    frames: s.anims.generateFrameNumbers('orc',    { start: 0, end: 3 }), frameRate: 6,  repeat: -1 });
+  s.anims.create({ key: 'orc-attack',  frames: s.anims.generateFrameNumbers('orc',    { start: 4, end: 5 }), frameRate: 6,  repeat: 0  });
+  s.anims.create({ key: 'goblin-walk', frames: s.anims.generateFrameNumbers('goblin', { start: 0, end: 3 }), frameRate: 10, repeat: -1 });
+  s.anims.create({ key: 'goblin-attack',frames:s.anims.generateFrameNumbers('goblin', { start: 4, end: 5 }), frameRate: 10, repeat: 0  });
+  s.anims.create({ key: 'loup-walk',   frames: s.anims.generateFrameNumbers('loupGarou', { start: 0, end: 3 }), frameRate: 7,  repeat: -1 });
+  s.anims.create({ key: 'loup-attack', frames: s.anims.generateFrameNumbers('loupGarou', { start: 4, end: 5 }), frameRate: 8,  repeat: 0  });
+
+  // ---- Joueur ----
+  player = s.physics.add.sprite(130, FLOOR, 'hero', 0);
+  player.setOrigin(0.5, 1);
+  player.body.setSize(30, 46);   // hitbox centrée sur le corps, ignore l'épée
+  player.body.setOffset(17, 8);
+  player.setCollideWorldBounds(true);
+  s.physics.add.collider(player, groundRect);
+  player.play('hero-idle');
+
+  // ---- Ennemis ----
+  enemies = s.physics.add.group();
+  [
+    { x: 650,  type: 'goblin' },
+    { x: 950,  type: 'orc'    },
+    { x: 1250, type: 'goblin' },
+    { x: 1550, type: 'goblin' },
+    { x: 1850, type: 'orc'    },
+    { x: 2150, type: 'goblin' },
+    { x: 2450, type: 'orc'    },
+    { x: 2750, type: 'goblin' },
+    { x: 3050, type: 'orc'    },
+    { x: 3350, type: 'goblin' },
+    { x: 3650, type: 'orc'    },
+    { x: 3950, type: 'goblin' },
+    { x: 4250, type: 'orc'    },
+    { x: 4550, type: 'goblin' },
+  ].forEach(d => spawnEnnemi(s, d.x, d.type, groundRect));
+
+  // ---- Projectiles ----
+  projectiles = s.physics.add.group();
+  projectilesJoueur = s.physics.add.group();
+
+  // ---- Parachutistes (exactement 15 au total) ----
+  parachutistes = s.physics.add.group();
+  const paraTimer = s.time.addEvent({
+    delay: 10000,
+    callback: () => {
+      spawnParachutiste(s);
+      if (paraSpawnes >= PARA_MAX) paraTimer.remove();
+    },
+    loop: true
+  });
+  s.time.delayedCall(6000, () => spawnParachutiste(s)); // premier après 6s
+
+  // ---- Caméra ----
+  s.cameras.main.setBounds(0, 0, WORLD, H);
+  s.cameras.main.startFollow(player, true, 0.08, 0.1);
+
+  // ---- Contrôles ----
+  cursors  = s.input.keyboard.createCursorKeys();
+  spaceKey = s.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+  // ---- UI (scroll factor 0) ----
+  // Fond UI
+  const uiBg = s.add.graphics().setScrollFactor(0).setDepth(20);
+  uiBg.fillStyle(0x000000, 0.45);
+  uiBg.fillRoundedRect(8, 8, 220, 32, 6);
+
+  hpBarGfx   = s.add.graphics().setScrollFactor(0).setDepth(21);
+  s.add.text(14, 14, '♥', { fontSize: '16px', fill: '#F44336' }).setScrollFactor(0).setDepth(22);
+  hpTextObj  = s.add.text(46, 14, '100 / 100', {
+    fontSize: '14px', fill: '#FFF', stroke: '#000', strokeThickness: 3
+  }).setScrollFactor(0).setDepth(22);
+  scoreTextObj = s.add.text(W - 10, 12, 'Score : 0', {
+    fontSize: '16px', fill: '#FFD700', stroke: '#000', strokeThickness: 3
+  }).setOrigin(1, 0).setScrollFactor(0).setDepth(22);
+
+  // Fond UI armure
+  const armorBg = s.add.graphics().setScrollFactor(0).setDepth(20);
+  armorBg.fillStyle(0x000000, 0.45);
+  armorBg.fillRoundedRect(8, 44, 220, 30, 6);
+  armorBarGfx  = s.add.graphics().setScrollFactor(0).setDepth(21);
+  armorTextObj = s.add.text(14, 48, '', {
+    fontSize: '13px', fill: '#90CAF9', stroke: '#000', strokeThickness: 2
+  }).setScrollFactor(0).setDepth(22);
+
+  s.add.text(W / 2, H - 18, '← → Déplacer  |  ↑ Sauter  |  ESPACE Attaquer  |  ↓ Armure', {
+    fontSize: '13px', fill: '#DDD', stroke: '#222', strokeThickness: 2
+  }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(22);
+
+  dessineBarreVie();
+
+  // Limites du monde physique
+  s.physics.world.setBounds(0, 0, WORLD, H + 300);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SPAWN ENNEMI
+// ═══════════════════════════════════════════════════════════
+function spawnEnnemi(scene, x, type, groundRect) {
+  const isOrc = type === 'orc';
+  const e = enemies.create(x, FLOOR, type, 0);
+  e.setOrigin(0.5, 1);
+  if (isOrc) {
+    e.body.setSize(50, 66);
+    e.body.setOffset(15, 12);
+  } else {
+    e.body.setSize(28, 46);
+    e.body.setOffset(9, 8);
+  }
+  e.setData('type',  type);
+  e.setData('hp',    isOrc ? 60 : 30);
+  e.setData('maxHP', isOrc ? 60 : 30);
+  e.setData('speed', isOrc ? 55 : 90);
+  e.setData('dmg',   isOrc ? 15 : 8);
+  e.setData('range', isOrc ? 80 : 58);
+  e.setData('atkCD',  0);
+  e.setData('projCD', Phaser.Math.FloatBetween(3, 6));
+  e.setData('aaCD',   Phaser.Math.FloatBetween(1, 3));
+  e.setData('patDir', -1);
+  e.setData('patCD',  Phaser.Math.FloatBetween(2, 5));
+  e.play(type + '-walk');
+  scene.physics.add.collider(e, groundRect);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  UPDATE
+// ═══════════════════════════════════════════════════════════
+function update(time, delta) {
+  if (gameOver) return;
+  const dt = delta / 1000;
+  attackTimer = Math.max(0, attackTimer - dt);
+  hurtTimer   = Math.max(0, hurtTimer   - dt);
+  if (armorActive) {
+    armorTimer = Math.max(0, armorTimer - dt);
+    if (armorTimer <= 0) armorActive = false;
+  }
+  if (armorCharges < 3) {
+    armorRecharge = Math.max(0, armorRecharge - dt);
+    if (armorRecharge <= 0) {
+      armorCharges++;
+      if (armorCharges < 3) armorRecharge = ARMOR_COOLDOWN; // relancer pour la suivante
+    }
+  }
+  gererJoueur(this, dt);
+  updateParachutistes(this);
+  if (level === 2 && boss && boss.active) gererBoss(this, dt);
+  else gererEnnemis(this, dt);
+  verifierProjectiles(this);
+  verifierLances(this);
+  dessineBarreVie();
+
+  // Niveau 1 : portail quand tout est mort
+  if (level === 1 && !portal && !gameOver &&
+      enemies.countActive() === 0 && parachutistes.countActive() === 0) {
+    spawnPortail(this);
+  }
+
+  // Collision portail
+  if (portal && level === 1) {
+    const pdx = Math.abs(player.x - portal.x);
+    const pdy = Math.abs(player.y - (portal.y - 50));
+    if (pdx < 45 && pdy < 55) {
+      portal.destroy(); portal = null;
+      this.cameras.main.fadeOut(900);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        demarrerBoss(this);
+        this.cameras.main.fadeIn(900);
+      });
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  JOUEUR
+// ═══════════════════════════════════════════════════════════
+function gererJoueur(scene, dt) {
+  const enAttaque = player.anims.currentAnim?.key === 'hero-attack' && player.anims.isPlaying;
+  const auSol = player.body.blocked.down;
+
+  // Saut
+  if (Phaser.Input.Keyboard.JustDown(cursors.up) && auSol && !enAttaque) {
+    player.setVelocityY(-560);
+  }
+
+  // Attaque
+  if (Phaser.Input.Keyboard.JustDown(spaceKey) && attackTimer <= 0 && !enAttaque && auSol) {
+    attackTimer = 0.5;
+    player.play('hero-attack', true);
+    if (hasLance) {
+      // Tir de lance à distance
+      const dir = player.flipX ? -1 : 1;
+      const l = projectilesJoueur.create(player.x + dir * 24, player.y - 30, 'lanceProj');
+      l.setOrigin(0.5, 0.5);
+      l.body.allowGravity = false;
+      l.setVelocityX(dir * 560);
+      l.setFlipX(player.flipX);
+      l.setData('dmg', 30 + Phaser.Math.Between(0, 10));
+    } else {
+      // Mêlée épée
+      enemies.getChildren().forEach(e => {
+        if (!e.active) return;
+        const dx = e.x - player.x;
+        const portee = player.flipX ? (dx < 0 && dx > -95) : (dx > 0 && dx < 95);
+        if (portee && Math.abs(e.y - player.y) < 55)
+          blesserEnnemi(scene, e, 20 + Phaser.Math.Between(0, 15));
+      });
+    }
+    return;
+  }
+
+  if (enAttaque) return;
+
+  // Stomp : joueur en train de tomber sur un ennemi
+  if (player.body.velocity.y > 60 && !auSol) {
+    enemies.getChildren().forEach(e => {
+      if (!e.active) return;
+      const isOrc  = e.getData('type') === 'orc';
+      const tetaY  = e.y - (isOrc ? 70 : 48);   // hauteur approximative de la tête
+      const pieds  = player.y;
+      const distX  = Math.abs(player.x - e.x);
+      if (pieds >= tetaY - 10 && pieds <= tetaY + 18 && distX < 44) {
+        // Touché sur la tête !
+        stompCombo++;
+        const bonusScore = (isOrc ? 100 : 50) * stompCombo;
+        score += bonusScore;
+        scoreTextObj.setText('Score : ' + score);
+        blesserEnnemi(scene, e, isOrc ? 40 : 30, true);
+        player.setVelocityY(-420);              // rebond
+        hurtTimer = 0.8;                        // invincible → pas de dégât en retour
+        const comboTxt = stompCombo > 1 ? `STOMP x${stompCombo}!\n+${bonusScore}` : `STOMP!\n+${bonusScore}`;
+        afficherDegats(scene, e.x, e.y - 80, comboTxt, '#FFD700');
+      }
+    });
+  }
+
+  // Reset combo stomp au sol
+  if (auSol && stompCombo > 0) stompCombo = 0;
+
+  // Activation armure (↓)
+  if (Phaser.Input.Keyboard.JustDown(cursors.down) && !armorActive && armorCharges > 0) {
+    armorActive = true;
+    armorTimer  = ARMOR_DURATION;
+    armorCharges--;
+    if (armorCharges < 3 && armorRecharge <= 0) armorRecharge = ARMOR_COOLDOWN;
+  }
+
+  // Aura visuelle armure
+  if (armorActive) {
+    const pulse = 0.85 + 0.15 * Math.sin(Date.now() / 120);
+    player.setTint(Phaser.Display.Color.GetColor(
+      Math.floor(100 + 100 * pulse),
+      Math.floor(180 + 60 * pulse),
+      255
+    ));
+  } else {
+    if (hurtTimer <= 0) player.clearTint();
+  }
+
+  // Clignotement pendant invincibilité
+  player.setAlpha(hurtTimer > 0 ? (Math.floor(hurtTimer * 10) % 2 === 0 ? 0.4 : 1) : 1);
+
+  // Mouvement
+  if (cursors.left.isDown) {
+    player.setVelocityX(-195);
+    player.setFlipX(true);
+    if (auSol) player.play('hero-walk', true);
+  } else if (cursors.right.isDown) {
+    player.setVelocityX(195);
+    player.setFlipX(false);
+    if (auSol) player.play('hero-walk', true);
+  } else {
+    player.setVelocityX(0);
+    if (auSol) player.play('hero-idle', true);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ENNEMIS IA
+// ═══════════════════════════════════════════════════════════
+function gererEnnemis(scene, dt) {
+  enemies.getChildren().forEach(e => {
+    if (!e.active) return;
+
+    const type  = e.getData('type');
+    const speed = e.getData('speed');
+    const range = e.getData('range');
+    let atkCD   = Math.max(0, e.getData('atkCD')  - dt);
+    let projCD  = Math.max(0, e.getData('projCD') - dt);
+    let aaCD    = Math.max(0, e.getData('aaCD')   - dt);
+    let patCD   = Math.max(0, e.getData('patCD')  - dt);
+    let patDir  = e.getData('patDir');
+
+    e.setData('atkCD',  atkCD);
+    e.setData('projCD', projCD);
+    e.setData('aaCD',   aaCD);
+    e.setData('patCD',  patCD);
+
+    const dx    = player.x - e.x;
+    const dist  = Math.abs(dx);
+    const dyAbs = Math.abs(player.y - e.y);
+    const hauteurSprite = type === 'orc' ? 78 : 52;
+    const joueurAuDessus = player.y < e.y - hauteurSprite + 10;
+
+    // ---- Tir anti-aérien quand le joueur saute au dessus ----
+    if (joueurAuDessus && dist < 350 && aaCD <= 0) {
+      lancerProjectileAerien(scene, e, type, dx, player.y - e.y);
+      e.setData('aaCD', type === 'orc' ? 1.8 : 1.2);
+    }
+
+    if (dist < 480 && dyAbs < 80 && !joueurAuDessus) {
+      // ---- Lancer de projectile horizontal (à distance) ----
+      if (dist > range && dist < 420 && projCD <= 0) {
+        lancerProjectile(scene, e, type, dx);
+        e.setData('projCD', type === 'orc' ? 4.0 : 2.8);
+      }
+
+      // ---- Détection : approche ou attaque ----
+      if (dist > range) {
+        e.setVelocityX(dx > 0 ? speed : -speed);
+        e.setFlipX(dx < 0);
+        e.play(type + '-walk', true);
+      } else {
+        e.setVelocityX(0);
+        e.setFlipX(dx < 0);
+        if (atkCD <= 0) {
+          e.play(type + '-attack', true);
+          e.setData('atkCD', type === 'orc' ? 1.8 : 1.1);
+          if (hurtTimer <= 0) {
+            if (armorActive) {
+              afficherDegats(scene, player.x, player.y - 36, 'BLOQUÉ!', '#90CAF9');
+              hurtTimer = 0.4;
+            } else {
+              const dmg = e.getData('dmg') + Phaser.Math.Between(0, 5);
+              playerHP = Math.max(0, playerHP - dmg);
+              hurtTimer = 0.7;
+              afficherDegats(scene, player.x, player.y - 36, `-${dmg}`, '#FF8C00');
+              scene.cameras.main.shake(180, 0.007);
+              if (playerHP <= 0) gameOverEcran(scene);
+            }
+          }
+        }
+      }
+    } else {
+      // ---- Patrouille locale ----
+      if (patCD <= 0) {
+        patDir *= -1;
+        e.setData('patDir', patDir);
+        e.setData('patCD', Phaser.Math.FloatBetween(2, 5));
+      }
+      e.setVelocityX(patDir * speed * 0.4);
+      e.setFlipX(patDir < 0);
+      e.play(type + '-walk', true);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PARACHUTISTES
+// ═══════════════════════════════════════════════════════════
+function spawnParachutiste(scene) {
+  if (gameOver || paraSpawnes >= PARA_MAX) return;
+  paraSpawnes++;
+  const x = Phaser.Math.Clamp(player.x + Phaser.Math.Between(-250, 350), 60, WORLD - 60);
+  const p = parachutistes.create(x, -20, 'para');
+  p.setOrigin(0.5, 1);
+  p.body.allowGravity = false;
+  p.setVelocityY(72);
+  p.setData('hp', 50);
+  p.setData('type', 'para');
+  // Balancement doux
+  scene.tweens.add({
+    targets: p, angle: { from: -10, to: 10 },
+    duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+  });
+}
+
+function updateParachutistes(scene) {
+  parachutistes.getChildren().forEach(p => {
+    if (!p.active) return;
+    // Stomp possible en l'air aussi
+    if (player.body.velocity.y > 60) {
+      const dx = Math.abs(player.x - p.x);
+      const dy = player.y - (p.y - 75);   // tête du monstre ≈ 75px avant le bas
+      if (dx < 30 && dy >= -8 && dy <= 20) {
+        blesserEnnemi(scene, p, 30, false);
+        player.setVelocityY(-420);
+        hurtTimer = 0.8;
+      }
+    }
+    // Atterrissage
+    if (p.y >= FLOOR) {
+      const lx = p.x;
+      p.destroy();
+      // Devient un ennemi au sol
+      const e = enemies.create(lx, FLOOR, 'goblin', 0);
+      e.setOrigin(0.5, 1);
+      e.body.setSize(28, 46); e.body.setOffset(9, 8);
+      e.setData('type',   'para');
+      e.setData('hp',     50);  e.setData('maxHP',  50);
+      e.setData('speed',  120); e.setData('dmg',    18);
+      e.setData('range',  58);  e.setData('atkCD',  0);
+      e.setData('projCD', Phaser.Math.FloatBetween(2, 4));
+      e.setData('aaCD',   Phaser.Math.FloatBetween(1, 2));
+      e.setData('patDir', -1);  e.setData('patCD',  2);
+      e.play('goblin-walk');
+      scene.physics.add.collider(e, groundRect);
+      // Annonce
+      afficherDegats(scene, lx, FLOOR - 70, '⚠ PARACHUTISTE !', '#FF9800');
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PROJECTILES
+// ═══════════════════════════════════════════════════════════
+function lancerProjectile(scene, ennemi, type, dx) {
+  const isOrc  = type === 'orc';
+  const key    = isOrc ? 'rock' : 'dague';
+  const vx     = (dx > 0 ? 1 : -1) * (isOrc ? 260 : 380);
+  const startY = ennemi.y - (isOrc ? 55 : 36);   // hauteur du bras
+
+  const proj = projectiles.create(ennemi.x, startY, key);
+  proj.setOrigin(0.5, 0.5);
+  proj.body.allowGravity = isOrc;   // le rocher tombe, la dague vole droit
+  proj.body.setGravityY(isOrc ? 180 : 0);
+  proj.setVelocityX(vx);
+  proj.setFlipX(dx < 0);
+  proj.setData('dmg', isOrc ? 12 : 6);
+
+  // Rotation pour la dague
+  if (!isOrc) {
+    scene.tweens.add({
+      targets: proj, angle: dx > 0 ? 360 : -360,
+      duration: 600, repeat: -1
+    });
+  }
+}
+
+function lancerProjectileAerien(scene, ennemi, type, dx, dy) {
+  const isOrc = type === 'orc';
+  const key   = isOrc ? 'rock' : 'dague';
+
+  // Viser le joueur : normaliser le vecteur (dx, dy) et appliquer une vitesse
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  const vitesse = isOrc ? 320 : 430;
+  const vx = (dx / dist) * vitesse;
+  const vy = (dy / dist) * vitesse;
+
+  const startY = ennemi.y - (isOrc ? 50 : 34);
+  const proj = projectiles.create(ennemi.x, startY, key);
+  proj.setOrigin(0.5, 0.5);
+  proj.body.allowGravity = false;   // pas de gravité : trajectoire droite vers le joueur
+  proj.setVelocity(vx, vy);
+  proj.setFlipX(dx < 0);
+  proj.setData('dmg', isOrc ? 10 : 5);
+
+  // Rotation rapide pour montrer que c'est un tir tendu
+  scene.tweens.add({
+    targets: proj, angle: dx > 0 ? 360 : -360,
+    duration: isOrc ? 500 : 300, repeat: -1
+  });
+}
+
+function verifierProjectiles(scene) {
+  projectiles.getChildren().forEach(proj => {
+    if (!proj.active) return;
+
+    // Supprimer si hors du monde
+    if (proj.x < player.x - 900 || proj.x > player.x + 900 || proj.y > H + 50) {
+      proj.destroy();
+      return;
+    }
+
+    // Collision avec le joueur
+    if (hurtTimer > 0) return;
+    const dx = Math.abs(proj.x - player.x);
+    const dy = Math.abs(proj.y - (player.y - 28));
+    if (dx < 22 && dy < 26) {
+      if (armorActive) {
+        afficherDegats(scene, player.x, player.y - 50, 'BLOQUÉ!', '#90CAF9');
+        hurtTimer = 0.3;
+      } else {
+        const dmg = proj.getData('dmg');
+        playerHP = Math.max(0, playerHP - dmg);
+        hurtTimer = 0.6;
+        afficherDegats(scene, player.x, player.y - 50, `-${dmg}`, '#FF4400');
+        scene.cameras.main.shake(120, 0.006);
+        if (playerHP <= 0) gameOverEcran(scene);
+      }
+      proj.destroy();
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BLESSER UN ENNEMI
+// ═══════════════════════════════════════════════════════════
+function blesserEnnemi(scene, e, dmg, scoreDejaCompte = false) {
+  const hp = e.getData('hp') - dmg;
+  e.setData('hp', hp);
+
+  // Flash blanc
+  e.setTint(0xFFFFFF);
+  scene.time.delayedCall(130, () => { if (e.active) e.clearTint(); });
+
+  // Recul
+  e.setVelocityX(player.flipX ? -220 : 220);
+
+  // Particule impact
+  const hit = scene.add.image(e.x, e.y - (e.getData('type') === 'orc' ? 50 : 36), 'hit').setScale(1.4).setDepth(15);
+  scene.tweens.add({ targets: hit, scaleX: 2.8, scaleY: 2.8, alpha: 0, duration: 380, onComplete: () => hit.destroy() });
+
+  afficherDegats(scene, e.x, e.y - (e.getData('type') === 'orc' ? 70 : 55), `-${dmg}`, '#FF3333');
+
+  if (hp <= 0) {
+    if (e.getData('type') === 'para') {
+      playerHP = Math.min(100, playerHP + 10);
+      afficherDegats(scene, player.x, player.y - 60, '+10 ❤', '#4CAF50');
+    }
+    if (!scoreDejaCompte) {
+      score += e.getData('type') === 'orc' ? 100 : e.getData('type') === 'para' ? 150 : 50;
+      scoreTextObj.setText('Score : ' + score);
+    }
+    scene.tweens.add({
+      targets: e,
+      alpha: 0,
+      y: e.y + 18,
+      angle: e.flipX ? -70 : 70,
+      duration: 480,
+      onComplete: () => e.destroy()
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  UTILITAIRES
+// ═══════════════════════════════════════════════════════════
+function afficherDegats(scene, x, y, texte, couleur) {
+  const t = scene.add.text(x, y, texte, {
+    fontSize: '22px', fill: couleur,
+    stroke: '#000', strokeThickness: 4, fontStyle: 'bold'
+  }).setOrigin(0.5).setDepth(16);
+  scene.tweens.add({
+    targets: t, y: y - 60, alpha: 0, duration: 750,
+    ease: 'Quad.easeOut',
+    onComplete: () => t.destroy()
+  });
+}
+
+function dessineBarreVie() {
+  // ---- 3 icônes d'armure ----
+  armorBarGfx.clear();
+  // 3 boucliers côte à côte
+  for (let i = 0; i < 3; i++) {
+    const bx = 14 + i * 68;
+    const charged = i < armorCharges;
+    // Fond bouclier
+    armorBarGfx.fillStyle(charged ? 0x1565C0 : 0x333333, 1);
+    armorBarGfx.fillRoundedRect(bx, 47, 60, 20, 5);
+    // Reflet si chargé
+    if (charged) {
+      armorBarGfx.fillStyle(0x90CAF9, 0.3);
+      armorBarGfx.fillRoundedRect(bx + 2, 48, 56, 7, 3);
+    }
+    // Barre de recharge sur la 1ère charge vide
+    if (!charged && i === armorCharges && armorRecharge > 0) {
+      const ratio = 1 - armorRecharge / ARMOR_COOLDOWN;
+      armorBarGfx.fillStyle(0x1976D2, 0.7);
+      armorBarGfx.fillRoundedRect(bx, 47, 60 * ratio, 20, 5);
+    }
+    armorBarGfx.lineStyle(2, charged ? 0x90CAF9 : 0x555555, 1);
+    armorBarGfx.strokeRoundedRect(bx, 47, 60, 20, 5);
+  }
+  // Texte sur chaque bouclier
+  if (armorActive) {
+    armorTextObj.setText(`  🛡${Math.ceil(armorTimer)}s   🛡         🛡`);
+  } else {
+    const labels = ['  🛡↓ ', '  🛡↓ ', '  🛡↓ '];
+    armorTextObj.setText(
+      armorCharges > 0
+        ? labels.slice(0, armorCharges).join('      ') + (armorCharges < 3 ? `      ⏱${Math.ceil(armorRecharge)}s` : '')
+        : `⏱${Math.ceil(armorRecharge)}s`
+    );
+  }
+
+  // ---- Barre vie ----
+  hpBarGfx.clear();
+  const ratio = playerHP / 100;
+  // Fond
+  hpBarGfx.fillStyle(0x111111, 0.9);
+  hpBarGfx.fillRoundedRect(36, 12, 174, 20, 4);
+  // Barre
+  const col = ratio > 0.5 ? 0x4CAF50 : ratio > 0.25 ? 0xFF9800 : 0xF44336;
+  hpBarGfx.fillStyle(col, 1);
+  hpBarGfx.fillRoundedRect(37, 13, 172 * ratio, 18, 3);
+  // Reflet
+  hpBarGfx.fillStyle(0xFFFFFF, 0.18);
+  hpBarGfx.fillRoundedRect(37, 13, 172 * ratio, 7, 3);
+  // Contour
+  hpBarGfx.lineStyle(2, 0xFFFFFF, 0.6);
+  hpBarGfx.strokeRoundedRect(36, 12, 174, 20, 4);
+  hpTextObj.setText(playerHP + ' / 100');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PORTAIL & BOSS
+// ═══════════════════════════════════════════════════════════
+function spawnPortail(scene) {
+  const px = Math.min(player.x + 260, WORLD - 80);
+  portal = scene.add.image(px, FLOOR - 10, 'portal').setOrigin(0.5, 1).setDepth(10);
+  scene.tweens.add({ targets: portal, scaleX: 1.15, scaleY: 1.15, duration: 900, yoyo: true, repeat: -1 });
+  scene.tweens.add({ targets: portal, angle: 360, duration: 4000, repeat: -1 });
+  afficherDegats(scene, px, FLOOR - 115, '✨ PORTAIL VERS LE BOSS — TOUCHEZ-LE !', '#E040FB');
+}
+
+function demarrerBoss(scene) {
+  level = 2;
+  hasLance = true;
+
+  // Nettoyer
+  enemies.clear(true, true);
+  projectiles.clear(true, true);
+  projectilesJoueur.clear(true, true);
+
+  // Replacer le joueur
+  player.setPosition(120, FLOOR);
+  player.setVelocity(0, 0);
+  playerHP = 100;   // vie pleine pour le boss
+
+  // Fond sombre
+  const nuit = scene.add.graphics().setScrollFactor(0).setDepth(4);
+  nuit.fillStyle(0x000000, 0.5);
+  nuit.fillRect(0, 0, W, H);
+
+  // Titre boss
+  const titre = scene.add.text(W / 2, H / 2 - 30, '⚠ LOUP-GAROU ⚠', {
+    fontSize: '42px', fill: '#FF5722', stroke: '#000', strokeThickness: 5, fontStyle: 'bold'
+  }).setOrigin(0.5).setScrollFactor(0).setDepth(40);
+  const sousTitre = scene.add.text(W / 2, H / 2 + 26, 'Ton épée est devenue une LANCE !', {
+    fontSize: '20px', fill: '#FFD700', stroke: '#000', strokeThickness: 3
+  }).setOrigin(0.5).setScrollFactor(0).setDepth(40);
+  scene.time.delayedCall(2800, () => {
+    scene.tweens.add({ targets: [titre, sousTitre], alpha: 0, duration: 600,
+      onComplete: () => { titre.destroy(); sousTitre.destroy(); nuit.destroy(); }
+    });
+  });
+
+  // Barre HP boss
+  bossHP = bossMaxHP = 300;
+  bossHPBarGfx = scene.add.graphics().setScrollFactor(0).setDepth(22);
+  scene.add.text(W / 2, 8, '☠ LOUP-GAROU ☠', {
+    fontSize: '13px', fill: '#FF5722', stroke: '#000', strokeThickness: 2
+  }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(22);
+
+  // Spawn boss
+  boss = scene.physics.add.sprite(580, FLOOR, 'loupGarou', 0);
+  boss.setOrigin(0.5, 1);
+  boss.body.setSize(54, 86); boss.body.setOffset(23, 22);
+  boss.setCollideWorldBounds(true);
+  scene.physics.add.collider(boss, groundRect);
+  boss.play('loup-walk');
+  bossChargeCD = 5;
+  bossAtkCD    = 1;
+}
+
+function gererBoss(scene, dt) {
+  bossAtkCD    = Math.max(0, bossAtkCD    - dt);
+  bossChargeCD = Math.max(0, bossChargeCD - dt);
+
+  const dx     = player.x - boss.x;
+  const dist   = Math.abs(dx);
+  const phase2 = bossHP <= 120;
+  const speed  = phase2 ? 115 : 78;
+
+  // --- Charge ---
+  if (bossCharging) {
+    const cdir = boss.getData('chargeDir');
+    boss.setVelocityX(cdir * 360);
+    boss.setFlipX(cdir < 0);
+    let ct = Math.max(0, boss.getData('chargeT') - dt);
+    boss.setData('chargeT', ct);
+    if (dist < 75 && hurtTimer <= 0) {
+      const dmg = 28 + Phaser.Math.Between(0, 12);
+      playerHP = Math.max(0, playerHP - dmg);
+      hurtTimer = 0.9;
+      afficherDegats(scene, player.x, player.y - 50, `-${dmg}`, '#FF1744');
+      scene.cameras.main.shake(280, 0.016);
+      if (playerHP <= 0) { gameOverEcran(scene); return; }
+    }
+    if (ct <= 0) { bossCharging = false; boss.setVelocityX(0); bossChargeCD = phase2 ? 4 : 7; }
+    return;
+  }
+
+  // --- Déclencher une charge ---
+  if (dist < 500 && bossChargeCD <= 0) {
+    bossCharging = true;
+    boss.setData('chargeDir', dx > 0 ? 1 : -1);
+    boss.setData('chargeT', 1.4);
+    afficherDegats(scene, boss.x, boss.y - 125, '⚡ CHARGE !', '#FF8F00');
+    return;
+  }
+
+  // --- Déplacement normal ---
+  boss.setFlipX(dx < 0);
+  if (dist > 100) {
+    boss.setVelocityX(dx > 0 ? speed : -speed);
+    boss.play('loup-walk', true);
+  } else {
+    boss.setVelocityX(0);
+    if (bossAtkCD <= 0) {
+      boss.play('loup-attack', true);
+      bossAtkCD = phase2 ? 0.85 : 1.3;
+      if (hurtTimer <= 0) {
+        const dmg = (phase2 ? 20 : 15) + Phaser.Math.Between(0, 8);
+        playerHP = Math.max(0, playerHP - dmg);
+        hurtTimer = 0.65;
+        afficherDegats(scene, player.x, player.y - 50, `-${dmg}`, '#FF1744');
+        scene.cameras.main.shake(200, 0.01);
+        if (playerHP <= 0) { gameOverEcran(scene); return; }
+      }
+    }
+  }
+
+  // Barre HP boss
+  if (bossHPBarGfx) {
+    bossHPBarGfx.clear();
+    const bw = 320, bx = (W - bw) / 2;
+    bossHPBarGfx.fillStyle(0x111111, 0.88); bossHPBarGfx.fillRoundedRect(bx-2, 22, bw+4, 18, 4);
+    const ratio = Math.max(0, bossHP / bossMaxHP);
+    const bcol  = ratio > 0.5 ? 0xE53935 : ratio > 0.25 ? 0xFF6F00 : 0xB71C1C;
+    bossHPBarGfx.fillStyle(bcol, 1);        bossHPBarGfx.fillRoundedRect(bx, 23, bw * ratio, 16, 3);
+    bossHPBarGfx.fillStyle(0xFFFFFF, 0.15); bossHPBarGfx.fillRoundedRect(bx, 23, bw * ratio, 6, 3);
+    bossHPBarGfx.lineStyle(2, 0xFFFFFF, 0.5); bossHPBarGfx.strokeRoundedRect(bx-2, 22, bw+4, 18, 4);
+  }
+}
+
+function verifierLances(scene) {
+  projectilesJoueur.getChildren().forEach(l => {
+    if (!l.active) return;
+    if (l.x < -100 || l.x > WORLD + 100) { l.destroy(); return; }
+
+    // Niveau 1 : touche les ennemis normaux
+    if (level === 1) {
+      enemies.getChildren().forEach(e => {
+        if (!e.active || !l.active) return;
+        if (Math.abs(l.x - e.x) < 38 && Math.abs(l.y - (e.y - 30)) < 38) {
+          blesserEnnemi(scene, e, l.getData('dmg'));
+          l.destroy();
+        }
+      });
+    }
+
+    // Niveau 2 : touche le boss
+    if (level === 2 && boss && boss.active && l.active) {
+      if (Math.abs(l.x - boss.x) < 54 && Math.abs(l.y - (boss.y - 55)) < 54) {
+        const dmg = l.getData('dmg');
+        bossHP = Math.max(0, bossHP - dmg);
+        boss.setTint(0xFFFFFF);
+        scene.time.delayedCall(140, () => { if (boss && boss.active) boss.clearTint(); });
+        afficherDegats(scene, boss.x, boss.y - 130, `-${dmg}`, '#FF3333');
+        l.destroy();
+        if (bossHP <= 0) {
+          boss.setTint(0xFF0000);
+          scene.tweens.add({
+            targets: boss, alpha: 0, y: boss.y + 24, angle: 80, duration: 900,
+            onComplete: () => { boss.destroy(); boss = null; victoireEcran(scene); gameOver = true; }
+          });
+        }
+      }
+    }
+  });
+}
+
+function victoireEcran(scene) {
+  player.setVelocityX(0);
+  scene.add.rectangle(W / 2, H / 2, 460, 230, 0x000000, 0.85)
+    .setScrollFactor(0).setDepth(30);
+  scene.add.text(W / 2, H / 2 - 70, '🏆 VICTOIRE ! 🏆', {
+    fontSize: '40px', fill: '#FFD700', stroke: '#000', strokeThickness: 5, fontStyle: 'bold'
+  }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
+  scene.add.text(W / 2, H / 2 - 10, 'Tous les monstres ont été vaincus !', {
+    fontSize: '18px', fill: '#FFF', stroke: '#000', strokeThickness: 3
+  }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
+  scene.add.text(W / 2, H / 2 + 35, `Score final : ${score}`, {
+    fontSize: '30px', fill: '#FFD700', stroke: '#000', strokeThickness: 4, fontStyle: 'bold'
+  }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
+  scene.add.text(W / 2, H / 2 + 80, 'F5 pour rejouer', {
+    fontSize: '17px', fill: '#CCC', stroke: '#000', strokeThickness: 2
+  }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
+}
+
+function gameOverEcran(scene) {
+  gameOver = true;
+  player.setTint(0xFF2222);
+  player.setVelocityX(0);
+
+  scene.add.rectangle(W / 2, H / 2, 420, 220, 0x000000, 0.85)
+    .setScrollFactor(0).setDepth(30);
+  scene.add.text(W / 2, H / 2 - 65, '☠  GAME OVER  ☠', {
+    fontSize: '40px', fill: '#FF2222', stroke: '#000', strokeThickness: 5, fontStyle: 'bold'
+  }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
+  scene.add.text(W / 2, H / 2 - 5, `Score final : ${score}`, {
+    fontSize: '28px', fill: '#FFD700', stroke: '#000', strokeThickness: 3
+  }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
+  scene.add.text(W / 2, H / 2 + 50, 'Appuyer sur F5 pour rejouer', {
+    fontSize: '17px', fill: '#CCC', stroke: '#000', strokeThickness: 2
+  }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
+}
+
+// ═══════════════════════════════════════════════════════════
+new Phaser.Game(config);
+</script>
+<div id="controles">← → Déplacer &nbsp;|&nbsp; ESPACE Attaquer &nbsp;|&nbsp; Ouvre ce fichier dans un navigateur</div>
+</body>
+
